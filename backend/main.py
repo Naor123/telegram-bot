@@ -8,6 +8,7 @@ import httpx
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
+from telethon.tl.functions.messages import DeleteHistoryRequest
 
 load_dotenv()
 
@@ -48,6 +49,7 @@ def register_forwarder():
         telegram_client.remove_event_handler(forwarder_handler)
 
     async def forwarder(event):
+        print(f"[forwarder] incoming chat_id={event.chat_id} monitored={config['monitored_groups']} active={config['active']}")
         if not config["active"]:
             return
         if event.chat_id not in config["monitored_groups"]:
@@ -55,7 +57,14 @@ def register_forwarder():
         text = (event.message.text or "").lower()
         if not any(kw.lower() in text for kw in config["keywords"]):
             return
-        await telegram_client.forward_messages(config["destination"], event.message)
+        print(f"[forwarder] match in chat {event.chat_id}: {repr(text[:80])}")
+        try:
+            dest = config["destination"]
+            dest = int(dest) if str(dest).lstrip("-").isdigit() else dest
+            await telegram_client.forward_messages(dest, event.message)
+            print(f"[forwarder] forwarded to {dest}")
+        except Exception as e:
+            print(f"[forwarder] ERROR: {e}")
 
     telegram_client.add_event_handler(forwarder, events.NewMessage)
     forwarder_handler = forwarder
@@ -199,4 +208,13 @@ async def set_config(body: MonitorConfig):
     config = body.model_dump()
     save_config(config)
     register_forwarder()
+    return {"ok": True}
+
+
+@app.delete("/bot/history")
+async def delete_bot_history():
+    if not await telegram_client.is_user_authorized():
+        return {"error": "Not authorized"}
+    bot_id = int(TOKEN.split(":")[0])
+    await telegram_client(DeleteHistoryRequest(peer=bot_id, max_id=0, just_clear=False, revoke=True))
     return {"ok": True}

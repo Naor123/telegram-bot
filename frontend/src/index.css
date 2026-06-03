@@ -178,6 +178,14 @@ h1 {
   background: #2563eb;
 }
 
+.btn-danger {
+  background: #dc2626;
+}
+
+.btn-danger:hover {
+  background: #b91c1c;
+}
+
 .btn:disabled {
   background: #1e40af;
   cursor: not-allowed;

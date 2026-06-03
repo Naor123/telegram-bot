@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { getBotInfo, getUpdates, sendMessage, getUserStatus, sendCode, verifyCode, getGroups, getConfig, saveConfig } from './api.js'
+import { getBotInfo, getUpdates, sendMessage, getUserStatus, sendCode, verifyCode, getGroups, getConfig, saveConfig, deleteBotHistory } from './api.js'
 
 function BotStatus() {
   const [info, setInfo] = useState(null)
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [confirm, setConfirm] = useState(false)
+  const [clearing, setClearing] = useState(false)
 
   const fetch = () => {
     getBotInfo()
@@ -18,6 +20,14 @@ function BotStatus() {
     const id = setInterval(fetch, 30000)
     return () => clearInterval(id)
   }, [])
+
+  const handleClear = () => {
+    setClearing(true)
+    deleteBotHistory()
+      .then(() => setConfirm(false))
+      .catch(() => {})
+      .finally(() => setClearing(false))
+  }
 
   return (
     <div className="card">
@@ -40,6 +50,18 @@ function BotStatus() {
           </span>
         </div>
       )}
+      <div style={{ marginTop: '1rem' }}>
+        {!confirm
+          ? <button className="btn btn-danger" onClick={() => setConfirm(true)}>Clear Chat History</button>
+          : <span className="toggle-row">
+              <span style={{ color: '#f87171' }}>Delete all messages with the bot?</span>
+              <button className="btn btn-danger" onClick={handleClear} disabled={clearing}>
+                {clearing ? 'Clearing...' : 'Yes, delete'}
+              </button>
+              <button className="btn" onClick={() => setConfirm(false)}>Cancel</button>
+            </span>
+        }
+      </div>
     </div>
   )
 }

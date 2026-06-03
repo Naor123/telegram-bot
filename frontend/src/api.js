@@ -9,3 +9,4 @@ export const verifyCode = (phone, code, password = '') => client.post('/user/ver
 export const getGroups = () => client.get('/user/groups').then(r => r.data)
 export const getConfig = () => client.get('/config').then(r => r.data)
 export const saveConfig = (cfg) => client.post('/config', cfg).then(r => r.data)
+export const deleteBotHistory = () => client.delete('/bot/history').then(r => r.data)
