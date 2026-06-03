@@ -42,6 +42,47 @@ config: dict = load_config()
 telegram_client = TelegramClient(SESSION_PATH, API_ID, API_HASH)
 phone_code_hash: str = ""
 forwarder_handler = None
+command_handler = None
+
+
+async def bot_reply(text: str):
+    async with httpx.AsyncClient() as client:
+        await client.post(TELEGRAM_BASE + "sendMessage", json={"chat_id": MY_CHAT_ID, "text": text})
+
+
+async def cmd_search(args: str):
+    if not args:
+        await bot_reply("Usage: /search <query>")
+        return
+    # TODO: AliExpress search logic
+    await bot_reply(f"Searching for: {args}\n(not implemented yet)")
+
+
+COMMAND_HANDLERS = {
+    "search": cmd_search,
+}
+
+
+def register_command_handler():
+    global command_handler
+    if command_handler is not None:
+        telegram_client.remove_event_handler(command_handler)
+
+    async def dispatch(event):
+        text = (event.message.text or "").strip()
+        if not text.startswith("/"):
+            return
+        parts = text[1:].split(None, 1)
+        cmd = parts[0].lower()
+        args = parts[1] if len(parts) > 1 else ""
+        fn = COMMAND_HANDLERS.get(cmd)
+        if fn:
+            await fn(args)
+        else:
+            await bot_reply(f"Unknown command: /{cmd}")
+
+    telegram_client.add_event_handler(dispatch, events.NewMessage(outgoing=True, chats=[BOT_ID]))
+    command_handler = dispatch
 
 
 def register_forwarder():
@@ -74,6 +115,7 @@ async def lifespan(app):
     await telegram_client.connect()
     if await telegram_client.is_user_authorized():
         register_forwarder()
+        register_command_handler()
     yield
     await telegram_client.disconnect()
 
@@ -158,6 +200,7 @@ async def verify_code(body: VerifyCodeRequest):
     except Exception as e:
         return {"error": str(e)}
     register_forwarder()
+    register_command_handler()
     return {"ok": True}
 
 
