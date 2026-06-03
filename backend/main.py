@@ -216,5 +216,5 @@ async def delete_bot_history():
     if not await telegram_client.is_user_authorized():
         return {"error": "Not authorized"}
     bot_id = int(TOKEN.split(":")[0])
-    await telegram_client(DeleteHistoryRequest(peer=bot_id, max_id=0, just_clear=False, revoke=True))
+    await telegram_client(DeleteHistoryRequest(peer=bot_id, max_id=0, just_clear=True, revoke=True))
     return {"ok": True}
