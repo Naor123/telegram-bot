@@ -285,12 +285,19 @@ function Monitor() {
 }
 
 export default function App() {
+  const [tab, setTab] = useState('bot')
   return (
     <div className="container">
       <h1>Telegram Bot Dashboard</h1>
-      <BotStatus />
-      <SendMessageForm />
-      <Monitor />
+      <div className="tab-bar">
+        <button className={`tab-btn${tab === 'bot' ? ' tab-active' : ''}`} onClick={() => setTab('bot')}>Bot</button>
+        <button className={`tab-btn${tab === 'monitor' ? ' tab-active' : ''}`} onClick={() => setTab('monitor')}>Monitor</button>
+      </div>
+      {tab === 'bot' && <>
+        <BotStatus />
+        <SendMessageForm />
+      </>}
+      {tab === 'monitor' && <Monitor />}
     </div>
   )
 }

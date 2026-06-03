@@ -270,6 +270,36 @@ h1 {
   border-radius: 3px;
 }
 
+.tab-bar {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab-btn:hover {
+  color: #e2e8f0;
+}
+
+.tab-active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
 .badge-channel {
   background: #3b1f5e;
   color: #c4b5fd;
