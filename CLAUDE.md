@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Workflow
+
+For any task touching multiple files or both frontend and backend, use parallel subagents — spawn one per concern and run them simultaneously.
+
 ## Dev Commands
 
 **Backend** (from `backend/`):
