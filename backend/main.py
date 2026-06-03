@@ -13,13 +13,15 @@ load_dotenv()
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_BASE = f"https://api.telegram.org/bot{TOKEN}/"
+MY_CHAT_ID = os.getenv("MY_CHAT_ID", "")
+BOT_ID = int(TOKEN.split(":")[0]) if TOKEN else 0
 
 API_ID = int(os.getenv("TELEGRAM_API_ID", "0"))
 API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 SESSION_PATH = os.path.join(os.path.dirname(__file__), "user")
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-DEFAULT_CONFIG = {"monitored_groups": [], "keywords": [], "destination": "", "active": False}
+DEFAULT_CONFIG = {"monitored_groups": [], "keywords": [], "active": False}
 
 
 def load_config() -> dict:
@@ -58,10 +60,8 @@ def register_forwarder():
             return
         print(f"[forwarder] match in chat {event.chat_id}: {repr(text[:80])}")
         try:
-            dest = config["destination"]
-            dest = int(dest) if str(dest).lstrip("-").isdigit() else dest
-            await telegram_client.forward_messages(dest, event.message)
-            print(f"[forwarder] forwarded to {dest}")
+            await telegram_client.forward_messages(BOT_ID, event.message)
+            print(f"[forwarder] forwarded to {BOT_ID}")
         except Exception as e:
             print(f"[forwarder] ERROR: {e}")
 
@@ -89,7 +89,6 @@ app.add_middleware(
 
 
 class SendMessage(BaseModel):
-    chat_id: str
     text: str
 
 
@@ -106,7 +105,6 @@ class VerifyCodeRequest(BaseModel):
 class MonitorConfig(BaseModel):
     monitored_groups: list[int]
     keywords: list[str]
-    destination: str
     active: bool
 
 
@@ -133,7 +131,7 @@ async def send_message(body: SendMessage):
     async with httpx.AsyncClient() as client:
         r = await client.post(
             TELEGRAM_BASE + "sendMessage",
-            json={"chat_id": body.chat_id, "text": body.text},
+            json={"chat_id": MY_CHAT_ID, "text": body.text},
         )
     return r.json()
 

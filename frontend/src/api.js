@@ -1,7 +1,7 @@
 import axios from 'axios'
 const client = axios.create({ baseURL: '/api' })
 export const getBotInfo = () => client.get('/bot-info').then(r => r.data)
-export const sendMessage = (chat_id, text) => client.post('/send', { chat_id, text }).then(r => r.data)
+export const sendMessage = (text) => client.post('/send', { text }).then(r => r.data)
 export const getUserStatus = () => client.get('/user/status').then(r => r.data)
 export const sendCode = (phone) => client.post('/user/send-code', { phone }).then(r => r.data)
 export const verifyCode = (phone, code, password = '') => client.post('/user/verify-code', { phone, code, password }).then(r => r.data)

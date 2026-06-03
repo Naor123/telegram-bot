@@ -67,7 +67,6 @@ function BotStatus() {
 }
 
 function SendMessageForm() {
-  const [chatId, setChatId] = useState('')
   const [text, setText] = useState('')
   const [status, setStatus] = useState(null)
   const [sending, setSending] = useState(false)
@@ -81,9 +80,9 @@ function SendMessageForm() {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!chatId.trim() || !text.trim()) return
+    if (!text.trim()) return
     setSending(true)
-    sendMessage(chatId.trim(), text.trim())
+    sendMessage(text.trim())
       .then(() => { showStatus('success', 'Sent!'); setText('') })
       .catch(err => showStatus('error', err.response?.data?.detail || err.message || 'Send failed'))
       .finally(() => setSending(false))
@@ -93,15 +92,6 @@ function SendMessageForm() {
     <div className="card">
       <div className="card-title">Send Message</div>
       <form onSubmit={handleSubmit} className="form-row">
-        <div className="form-field">
-          <label>Chat ID</label>
-          <input
-            type="text"
-            placeholder="e.g. 123456789"
-            value={chatId}
-            onChange={e => setChatId(e.target.value)}
-          />
-        </div>
         <div className="form-field">
           <label>Message</label>
           <textarea
@@ -127,7 +117,7 @@ function Monitor() {
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [groups, setGroups] = useState([])
-  const [cfg, setCfg] = useState({ monitored_groups: [], keywords: [], destination: '', active: false })
+  const [cfg, setCfg] = useState({ monitored_groups: [], keywords: [], active: false })
   const [newKeyword, setNewKeyword] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -279,19 +269,6 @@ function Monitor() {
             />
           </div>
           <button className="btn" type="button" onClick={addKeyword}>Add</button>
-        </div>
-      </div>
-
-      <div className="monitor-section">
-        <div className="monitor-section-title">Destination</div>
-        <div className="form-field">
-          <input
-            type="text"
-            placeholder="Chat ID or @username"
-            value={cfg.destination}
-            onChange={e => setCfg({ ...cfg, destination: e.target.value })}
-            onBlur={() => persist(cfg)}
-          />
         </div>
       </div>
 
