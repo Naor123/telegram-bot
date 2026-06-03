@@ -87,8 +87,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-updates_offset: int = 0
-
 
 class SendMessage(BaseModel):
     chat_id: str
@@ -128,21 +126,6 @@ async def bot_info():
         return {"error": data.get("description", "Telegram API error")}
     return data["result"]
 
-
-@app.get("/updates")
-async def get_updates():
-    global updates_offset
-    async with httpx.AsyncClient() as client:
-        r = await client.get(
-            TELEGRAM_BASE + "getUpdates",
-            params={"offset": updates_offset, "limit": 10},
-        )
-    data = r.json()
-    results = data.get("result", [])
-    if results:
-        updates_offset = max(u["update_id"] for u in results) + 1
-    messages = [u["message"] for u in results if "message" in u]
-    return {"messages": messages}
 
 
 @app.post("/send")

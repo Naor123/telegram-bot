@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { getBotInfo, getUpdates, sendMessage, getUserStatus, sendCode, verifyCode, getGroups, getConfig, saveConfig, deleteBotHistory } from './api.js'
+import { getBotInfo, sendMessage, getUserStatus, sendCode, verifyCode, getGroups, getConfig, saveConfig, deleteBotHistory } from './api.js'
 
 function BotStatus() {
   const [info, setInfo] = useState(null)
@@ -62,57 +62,6 @@ function BotStatus() {
             </span>
         }
       </div>
-    </div>
-  )
-}
-
-function RecentMessages() {
-  const [messages, setMessages] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    const fetch = () => {
-      getUpdates()
-        .then(data => { setMessages((data.messages || []).slice(-10).reverse()); setLoading(false) })
-        .catch(() => setLoading(false))
-    }
-    fetch()
-    const id = setInterval(fetch, 5000)
-    return () => clearInterval(id)
-  }, [])
-
-  const formatTime = (ts) => {
-    if (!ts) return ''
-    const d = new Date(ts * 1000)
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
-
-  return (
-    <div className="card">
-      <div className="card-title">Recent Messages</div>
-      {loading && <span className="loading">Loading...</span>}
-      {!loading && messages.length === 0 && (
-        <div className="empty-state">No messages yet</div>
-      )}
-      {!loading && messages.length > 0 && (
-        <div className="messages-list">
-          {messages.map((msg, i) => {
-            const from = msg.from
-            const name = from
-              ? (from.username ? `@${from.username}` : [from.first_name, from.last_name].filter(Boolean).join(' '))
-              : 'Unknown'
-            return (
-              <div className="message-item" key={msg.message_id ?? i}>
-                <div className="message-header">
-                  <span className="message-from">{name}</span>
-                  <span className="message-time">{formatTime(msg.date)}</span>
-                </div>
-                <div className="message-text">{msg.text || '[non-text message]'}</div>
-              </div>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }
@@ -366,7 +315,6 @@ export default function App() {
     <div className="container">
       <h1>Telegram Bot Dashboard</h1>
       <BotStatus />
-      <RecentMessages />
       <SendMessageForm />
       <Monitor />
     </div>
