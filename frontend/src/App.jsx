@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { getBotInfo, sendMessage, getUserStatus, sendCode, verifyCode, getGroups, getConfig, saveConfig, deleteBotHistory } from './api.js'
 
 function BotStatus() {
@@ -7,8 +7,10 @@ function BotStatus() {
   const [loading, setLoading] = useState(true)
   const [confirm, setConfirm] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testMsg, setTestMsg] = useState(null)
 
-  const fetch = () => {
+  const fetchInfo = () => {
     getBotInfo()
       .then(data => { setInfo(data); setError(null) })
       .catch(err => { setError(err.message || 'Failed to fetch'); setInfo(null) })
@@ -16,8 +18,8 @@ function BotStatus() {
   }
 
   useEffect(() => {
-    fetch()
-    const id = setInterval(fetch, 30000)
+    fetchInfo()
+    const id = setInterval(fetchInfo, 30000)
     return () => clearInterval(id)
   }, [])
 
@@ -27,6 +29,15 @@ function BotStatus() {
       .then(() => setConfirm(false))
       .catch(() => {})
       .finally(() => setClearing(false))
+  }
+
+  const handleTest = () => {
+    setTesting(true)
+    setTestMsg(null)
+    sendMessage('test')
+      .then(() => setTestMsg('ok'))
+      .catch(() => setTestMsg('err'))
+      .finally(() => setTesting(false))
   }
 
   return (
@@ -44,7 +55,12 @@ function BotStatus() {
           <span className="badge badge-ok">Online</span>
         </div>
       )}
-      <div style={{ marginTop: '1rem' }}>
+      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <button className="btn" onClick={handleTest} disabled={testing}>
+          {testing ? 'Sending...' : 'Send Test'}
+        </button>
+        {testMsg === 'ok' && <span className="inline-msg success">Sent!</span>}
+        {testMsg === 'err' && <span className="inline-msg error">Failed</span>}
         {!confirm
           ? <button className="btn btn-danger" onClick={() => setConfirm(true)}>Clear Chat History</button>
           : <span className="toggle-row">
@@ -60,50 +76,6 @@ function BotStatus() {
   )
 }
 
-function SendMessageForm() {
-  const [text, setText] = useState('')
-  const [status, setStatus] = useState(null)
-  const [sending, setSending] = useState(false)
-  const timerRef = useRef(null)
-
-  const showStatus = (type, msg) => {
-    setStatus({ type, msg })
-    clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setStatus(null), 3000)
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (!text.trim()) return
-    setSending(true)
-    sendMessage(text.trim())
-      .then(() => { showStatus('success', 'Sent!'); setText('') })
-      .catch(err => showStatus('error', err.response?.data?.detail || err.message || 'Send failed'))
-      .finally(() => setSending(false))
-  }
-
-  return (
-    <div className="card">
-      <div className="card-title">Send Message</div>
-      <form onSubmit={handleSubmit} className="form-row">
-        <div className="form-field">
-          <label>Message</label>
-          <textarea
-            placeholder="Type your message..."
-            value={text}
-            onChange={e => setText(e.target.value)}
-          />
-        </div>
-        <button className="btn" type="submit" disabled={sending}>
-          {sending ? 'Sending...' : 'Send'}
-        </button>
-        {status && (
-          <span className={`inline-msg ${status.type}`}>{status.msg}</span>
-        )}
-      </form>
-    </div>
-  )
-}
 
 function Monitor() {
   const [authStep, setAuthStep] = useState('checking')
@@ -292,7 +264,6 @@ export default function App() {
       </div>
       <div style={{ display: tab === 'bot' ? 'block' : 'none' }}>
         <BotStatus />
-        <SendMessageForm />
       </div>
       <div style={{ display: tab === 'monitor' ? 'block' : 'none' }}>
         <Monitor />
