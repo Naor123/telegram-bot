@@ -42,9 +42,6 @@ function BotStatus() {
       {!loading && info && (
         <div className="bot-info">
           <span className="badge badge-ok">Online</span>
-          <span className="bot-detail">
-            Username: <span>@{info.username}</span>
-          </span>
         </div>
       )}
       <div style={{ marginTop: '1rem' }}>
