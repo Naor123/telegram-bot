@@ -28,7 +28,7 @@ Browser → Vite dev server → `/api/*` proxy (strips `/api` prefix) → FastAP
 **Backend (`backend/main.py`):**
 All logic lives in one file. Two independent Telegram connections:
 
-1. **Bot API** (via `httpx`) — uses `TELEGRAM_BOT_TOKEN`. Module-level `updates_offset` advances after each poll. `/updates` unwraps Telegram's envelope and returns `{messages: [...]}`.
+1. **Bot API** (via `httpx`) — uses `TELEGRAM_BOT_TOKEN`. Endpoints: `/bot-info`, `/send`, `DELETE /bot/history`.
 
 2. **Telethon userbot** (MTProto) — uses `TELEGRAM_API_ID` + `TELEGRAM_API_HASH`. A single `TelegramClient` instance connects on FastAPI lifespan startup and disconnects on shutdown. Session persists to `backend/user.session`. A single `NewMessage` catch-all handler filters by `config["monitored_groups"]` and `config["keywords"]`, then calls `forward_messages`. The handler is re-registered via `register_forwarder()` on startup and on every `POST /config`.
 
@@ -37,8 +37,9 @@ All logic lives in one file. Two independent Telegram connections:
 
 **Frontend (`frontend/src/`):**
 - `api.js` — thin axios wrapper for all endpoints
-- `App.jsx` — four self-contained components: `BotStatus`, `RecentMessages`, `SendMessageForm`, `Monitor`
-- `Monitor` has a 3-step auth state machine (phone → code → authorized), then renders group checkboxes, keyword tags, destination input, and active toggle. All changes call `saveConfig` immediately.
+- `App.jsx` — three self-contained components: `BotStatus`, `SendMessageForm`, `Monitor`
+- `Monitor` has a 4-step auth state machine (checking → phone → code → authorized), then renders group checkboxes, keyword tags, destination input, and active toggle. All changes call `saveConfig` immediately.
+- `BotStatus` includes a confirmation-gated "Clear Chat History" button that calls `DELETE /bot/history` — deletes messages via `get_messages` + `delete_messages` in batches of 100 (does NOT remove the dialog).
 - `index.css` — all styles; dark theme (`#0f172a` base), no CSS framework
 
 ## Environment
