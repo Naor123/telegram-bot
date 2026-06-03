@@ -20,17 +20,25 @@ Both must run simultaneously. Backend on `:8000`, frontend on `:5173`.
 
 ## Architecture
 
-Single-purpose dashboard for interacting with the Telegram Bot API. No database — all state is in-memory.
+Two parallel Telegram integrations in one FastAPI + React app. No database — bot state is in-memory, monitor config persists to `backend/config.json`.
 
 **Request flow:**
-Browser → Vite dev server → `/api/*` proxy (strips `/api` prefix) → FastAPI on `:8000` → Telegram Bot API
+Browser → Vite dev server → `/api/*` proxy (strips `/api` prefix) → FastAPI on `:8000` → Telegram
 
 **Backend (`backend/main.py`):**
-All logic lives in one file. The Telegram base URL is built at module load from `TELEGRAM_BOT_TOKEN` in `backend/.env`. The `getUpdates` offset is a module-level integer (`updates_offset`) — it advances after each poll so messages are not re-delivered. The `/updates` endpoint unwraps Telegram's `{ok, result: [{update_id, message}]}` envelope and returns only `{messages: [...]}`.
+All logic lives in one file. Two independent Telegram connections:
+
+1. **Bot API** (via `httpx`) — uses `TELEGRAM_BOT_TOKEN`. Module-level `updates_offset` advances after each poll. `/updates` unwraps Telegram's envelope and returns `{messages: [...]}`.
+
+2. **Telethon userbot** (MTProto) — uses `TELEGRAM_API_ID` + `TELEGRAM_API_HASH`. A single `TelegramClient` instance connects on FastAPI lifespan startup and disconnects on shutdown. Session persists to `backend/user.session`. A single `NewMessage` catch-all handler filters by `config["monitored_groups"]` and `config["keywords"]`, then calls `forward_messages`. The handler is re-registered via `register_forwarder()` on startup and on every `POST /config`.
+
+**Monitor config** (`backend/config.json`, gitignored):
+`{monitored_groups: [int], keywords: [str], destination: str, active: bool}` — loaded at startup, saved on every config change.
 
 **Frontend (`frontend/src/`):**
-- `api.js` — thin axios wrapper; all calls go to `/api/*` which the Vite proxy forwards
-- `App.jsx` — three self-contained components: `BotStatus` (polls `/bot-info` every 30s), `RecentMessages` (polls `/updates` every 5s), `SendMessageForm` (POST to `/send`)
+- `api.js` — thin axios wrapper for all endpoints
+- `App.jsx` — four self-contained components: `BotStatus`, `RecentMessages`, `SendMessageForm`, `Monitor`
+- `Monitor` has a 3-step auth state machine (phone → code → authorized), then renders group checkboxes, keyword tags, destination input, and active toggle. All changes call `saveConfig` immediately.
 - `index.css` — all styles; dark theme (`#0f172a` base), no CSS framework
 
 ## Environment
@@ -38,6 +46,8 @@ All logic lives in one file. The Telegram base URL is built at module load from 
 `backend/.env` (not committed):
 ```
 TELEGRAM_BOT_TOKEN=<token from @BotFather>
+TELEGRAM_API_ID=<from my.telegram.org>
+TELEGRAM_API_HASH=<from my.telegram.org>
 ```
 
-To get a chat ID for sending messages: message the bot first, then read it from the Recent Messages panel.
+To get a chat ID for sending/forwarding: message the bot or use `me` as destination for Saved Messages.
