@@ -293,11 +293,13 @@ export default function App() {
         <button className={`tab-btn${tab === 'bot' ? ' tab-active' : ''}`} onClick={() => setTab('bot')}>Bot</button>
         <button className={`tab-btn${tab === 'monitor' ? ' tab-active' : ''}`} onClick={() => setTab('monitor')}>Monitor</button>
       </div>
-      {tab === 'bot' && <>
+      <div style={{ display: tab === 'bot' ? 'block' : 'none' }}>
         <BotStatus />
         <SendMessageForm />
-      </>}
-      {tab === 'monitor' && <Monitor />}
+      </div>
+      <div style={{ display: tab === 'monitor' ? 'block' : 'none' }}>
+        <Monitor />
+      </div>
     </div>
   )
 }
