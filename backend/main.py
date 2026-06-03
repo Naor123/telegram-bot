@@ -1,13 +1,76 @@
 import os
-from fastapi import FastAPI, HTTPException
+import json
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
 from dotenv import load_dotenv
+from telethon import TelegramClient, events
+from telethon.errors import SessionPasswordNeededError
 
 load_dotenv()
 
-app = FastAPI()
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_BASE = f"https://api.telegram.org/bot{TOKEN}/"
+
+API_ID = int(os.getenv("TELEGRAM_API_ID", "0"))
+API_HASH = os.getenv("TELEGRAM_API_HASH", "")
+SESSION_PATH = os.path.join(os.path.dirname(__file__), "user")
+
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
+DEFAULT_CONFIG = {"monitored_groups": [], "keywords": [], "destination": "", "active": False}
+
+
+def load_config() -> dict:
+    try:
+        with open(CONFIG_PATH, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return DEFAULT_CONFIG.copy()
+
+
+def save_config(cfg: dict):
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(cfg, f, indent=2)
+
+
+config: dict = load_config()
+
+telegram_client = TelegramClient(SESSION_PATH, API_ID, API_HASH)
+phone_code_hash: str = ""
+forwarder_handler = None
+
+
+def register_forwarder():
+    global forwarder_handler
+    if forwarder_handler is not None:
+        telegram_client.remove_event_handler(forwarder_handler)
+
+    async def forwarder(event):
+        if not config["active"]:
+            return
+        if event.chat_id not in config["monitored_groups"]:
+            return
+        text = (event.message.text or "").lower()
+        if not any(kw.lower() in text for kw in config["keywords"]):
+            return
+        await telegram_client.forward_messages(config["destination"], event.message)
+
+    telegram_client.add_event_handler(forwarder, events.NewMessage)
+    forwarder_handler = forwarder
+
+
+@asynccontextmanager
+async def lifespan(app):
+    await telegram_client.connect()
+    if await telegram_client.is_user_authorized():
+        register_forwarder()
+    yield
+    await telegram_client.disconnect()
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,15 +79,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_BASE = f"https://api.telegram.org/bot{TOKEN}/"
-
 updates_offset: int = 0
 
 
 class SendMessage(BaseModel):
     chat_id: str
     text: str
+
+
+class PhoneRequest(BaseModel):
+    phone: str
+
+
+class VerifyCodeRequest(BaseModel):
+    phone: str
+    code: str
+    password: str = ""
+
+
+class MonitorConfig(BaseModel):
+    monitored_groups: list[int]
+    keywords: list[str]
+    destination: str
+    active: bool
 
 
 @app.get("/health")
@@ -68,3 +145,58 @@ async def send_message(body: SendMessage):
             json={"chat_id": body.chat_id, "text": body.text},
         )
     return r.json()
+
+
+@app.get("/user/status")
+async def user_status():
+    return {"authorized": await telegram_client.is_user_authorized()}
+
+
+@app.post("/user/send-code")
+async def send_code(body: PhoneRequest):
+    global phone_code_hash
+    result = await telegram_client.send_code_request(body.phone)
+    phone_code_hash = result.phone_code_hash
+    return {"ok": True}
+
+
+@app.post("/user/verify-code")
+async def verify_code(body: VerifyCodeRequest):
+    try:
+        await telegram_client.sign_in(body.phone, body.code, phone_code_hash=phone_code_hash)
+    except SessionPasswordNeededError:
+        await telegram_client.sign_in(password=body.password)
+    except Exception as e:
+        return {"error": str(e)}
+    register_forwarder()
+    return {"ok": True}
+
+
+@app.get("/user/groups")
+async def get_groups():
+    dialogs = await telegram_client.get_dialogs()
+    groups = [
+        {
+            "id": d.id,
+            "name": d.name,
+            "type": "channel" if d.is_channel else "group",
+            "members_count": getattr(d.entity, "participants_count", None),
+        }
+        for d in dialogs
+        if d.is_group or d.is_channel
+    ]
+    return groups
+
+
+@app.get("/config")
+async def get_config():
+    return config
+
+
+@app.post("/config")
+async def set_config(body: MonitorConfig):
+    global config
+    config = body.model_dump()
+    save_config(config)
+    register_forwarder()
+    return {"ok": True}
