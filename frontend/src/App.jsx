@@ -37,7 +37,10 @@ function BotStatus() {
     sendMessage('test')
       .then(() => setTestMsg('ok'))
       .catch(() => setTestMsg('err'))
-      .finally(() => setTesting(false))
+      .finally(() => {
+        setTesting(false)
+        setTimeout(() => setTestMsg(null), 3000)
+      })
   }
 
   return (
