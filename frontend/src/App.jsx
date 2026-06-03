@@ -45,9 +45,6 @@ function BotStatus() {
           <span className="bot-detail">
             Username: <span>@{info.username}</span>
           </span>
-          <span className="bot-detail">
-            ID: <span>{info.id}</span>
-          </span>
         </div>
       )}
       <div style={{ marginTop: '1rem' }}>
