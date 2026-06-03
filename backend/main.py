@@ -8,7 +8,6 @@ import httpx
 from dotenv import load_dotenv
 from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
-from telethon.tl.functions.messages import DeleteHistoryRequest
 
 load_dotenv()
 
@@ -216,5 +215,8 @@ async def delete_bot_history():
     if not await telegram_client.is_user_authorized():
         return {"error": "Not authorized"}
     bot_id = int(TOKEN.split(":")[0])
-    await telegram_client(DeleteHistoryRequest(peer=bot_id, max_id=0, just_clear=True, revoke=True))
-    return {"ok": True}
+    messages = await telegram_client.get_messages(bot_id, limit=None)
+    ids = [m.id for m in messages]
+    for i in range(0, len(ids), 100):
+        await telegram_client.delete_messages(bot_id, ids[i:i+100], revoke=True)
+    return {"ok": True, "deleted": len(ids)}
