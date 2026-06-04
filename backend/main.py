@@ -1,113 +1,15 @@
-import os
-import json
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import httpx
-from dotenv import load_dotenv
-from telethon import TelegramClient, events
 from telethon.errors import SessionPasswordNeededError
 
-load_dotenv()
-
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_BASE = f"https://api.telegram.org/bot{TOKEN}/"
-MY_CHAT_ID = os.getenv("MY_CHAT_ID", "")
-BOT_ID = int(TOKEN.split(":")[0]) if TOKEN else 0
-
-API_ID = int(os.getenv("TELEGRAM_API_ID", "0"))
-API_HASH = os.getenv("TELEGRAM_API_HASH", "")
-SESSION_PATH = os.path.join(os.path.dirname(__file__), "user")
-
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "config.json")
-DEFAULT_CONFIG = {"monitored_groups": [], "keywords": [], "active": False}
-
-
-def load_config() -> dict:
-    try:
-        with open(CONFIG_PATH, "r") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return DEFAULT_CONFIG.copy()
-
-
-def save_config(cfg: dict):
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(cfg, f, indent=2)
-
-
-config: dict = load_config()
-
-telegram_client = TelegramClient(SESSION_PATH, API_ID, API_HASH)
-phone_code_hash: str = ""
-forwarder_handler = None
-command_handler = None
-
-
-async def bot_reply(text: str):
-    async with httpx.AsyncClient() as client:
-        await client.post(TELEGRAM_BASE + "sendMessage", json={"chat_id": MY_CHAT_ID, "text": text})
-
-
-async def cmd_search(args: str):
-    if not args:
-        await bot_reply("Usage: /search <query>")
-        return
-    # TODO: AliExpress search logic
-    await bot_reply(f"Searching for: {args}\n(not implemented yet)")
-
-
-COMMAND_HANDLERS = {
-    "search": cmd_search,
-}
-
-
-def register_command_handler():
-    global command_handler
-    if command_handler is not None:
-        telegram_client.remove_event_handler(command_handler)
-
-    async def dispatch(event):
-        text = (event.message.text or "").strip()
-        if not text.startswith("/"):
-            return
-        parts = text[1:].split(None, 1)
-        cmd = parts[0].lower()
-        args = parts[1] if len(parts) > 1 else ""
-        fn = COMMAND_HANDLERS.get(cmd)
-        if fn:
-            await fn(args)
-        else:
-            await bot_reply(f"Unknown command: /{cmd}")
-
-    telegram_client.add_event_handler(dispatch, events.NewMessage(outgoing=True, chats=[BOT_ID]))
-    command_handler = dispatch
-
-
-def register_forwarder():
-    global forwarder_handler
-    if forwarder_handler is not None:
-        telegram_client.remove_event_handler(forwarder_handler)
-
-    async def forwarder(event):
-        print(f"[forwarder] incoming chat_id={event.chat_id} monitored={config['monitored_groups']} active={config['active']}")
-        if not config["active"]:
-            return
-        if event.chat_id not in config["monitored_groups"]:
-            return
-        text = (event.message.text or "").lower()
-        if not any(kw.lower() in text for kw in config["keywords"]):
-            return
-        print(f"[forwarder] match in chat {event.chat_id}: {repr(text[:80])}")
-        try:
-            await telegram_client.forward_messages(BOT_ID, event.message)
-            print(f"[forwarder] forwarded to {BOT_ID}")
-        except Exception as e:
-            print(f"[forwarder] ERROR: {e}")
-
-    telegram_client.add_event_handler(forwarder, events.NewMessage)
-    forwarder_handler = forwarder
+from settings import TOKEN, TELEGRAM_BASE, MY_CHAT_ID, BOT_ID
+import config as cfg_module
+from config import save_config
+import telethon_mgr
+from telethon_mgr import telegram_client, register_forwarder, register_command_handler
 
 
 @asynccontextmanager
@@ -167,7 +69,6 @@ async def bot_info():
     return data["result"]
 
 
-
 @app.post("/send")
 async def send_message(body: SendMessage):
     async with httpx.AsyncClient() as client:
@@ -185,16 +86,15 @@ async def user_status():
 
 @app.post("/user/send-code")
 async def send_code(body: PhoneRequest):
-    global phone_code_hash
     result = await telegram_client.send_code_request(body.phone)
-    phone_code_hash = result.phone_code_hash
+    telethon_mgr.phone_code_hash = result.phone_code_hash
     return {"ok": True}
 
 
 @app.post("/user/verify-code")
 async def verify_code(body: VerifyCodeRequest):
     try:
-        await telegram_client.sign_in(body.phone, body.code, phone_code_hash=phone_code_hash)
+        await telegram_client.sign_in(body.phone, body.code, phone_code_hash=telethon_mgr.phone_code_hash)
     except SessionPasswordNeededError:
         await telegram_client.sign_in(password=body.password)
     except Exception as e:
@@ -222,14 +122,13 @@ async def get_groups():
 
 @app.get("/config")
 async def get_config():
-    return config
+    return cfg_module.config
 
 
 @app.post("/config")
 async def set_config(body: MonitorConfig):
-    global config
-    config = body.model_dump()
-    save_config(config)
+    cfg_module.config = body.model_dump()
+    save_config(cfg_module.config)
     register_forwarder()
     return {"ok": True}
 
@@ -238,9 +137,8 @@ async def set_config(body: MonitorConfig):
 async def delete_bot_history():
     if not await telegram_client.is_user_authorized():
         return {"error": "Not authorized"}
-    bot_id = int(TOKEN.split(":")[0])
-    messages = await telegram_client.get_messages(bot_id, limit=None)
+    messages = await telegram_client.get_messages(BOT_ID, limit=None)
     ids = [m.id for m in messages]
     for i in range(0, len(ids), 100):
-        await telegram_client.delete_messages(bot_id, ids[i:i+100], revoke=True)
+        await telegram_client.delete_messages(BOT_ID, ids[i:i + 100], revoke=True)
     return {"ok": True, "deleted": len(ids)}

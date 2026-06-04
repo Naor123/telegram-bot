@@ -1,0 +1,175 @@
+import React, { useState, useEffect } from 'react'
+import { getUserStatus, sendCode, verifyCode, getGroups, getConfig, saveConfig } from '../api.js'
+
+export default function Monitor() {
+  const [authStep, setAuthStep] = useState('checking')
+  const [phone, setPhone] = useState('')
+  const [code, setCode] = useState('')
+  const [password, setPassword] = useState('')
+  const [groups, setGroups] = useState([])
+  const [cfg, setCfg] = useState({ monitored_groups: [], keywords: [], active: false })
+  const [newKeyword, setNewKeyword] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const loadGroupsAndConfig = () => {
+    Promise.all([getGroups(), getConfig()])
+      .then(([g, c]) => { setGroups(g); setCfg(c) })
+      .catch(err => setError(err.message || 'Failed to load'))
+  }
+
+  useEffect(() => {
+    getUserStatus()
+      .then(data => {
+        if (data.authorized) {
+          setAuthStep('authorized')
+          loadGroupsAndConfig()
+        } else {
+          setAuthStep('phone')
+        }
+      })
+      .catch(() => setAuthStep('phone'))
+  }, [])
+
+  const handleSendCode = (e) => {
+    e.preventDefault()
+    setError('')
+    sendCode(phone)
+      .then(() => setAuthStep('code'))
+      .catch(err => setError(err.response?.data?.detail || err.message || 'Failed to send code'))
+  }
+
+  const handleVerify = (e) => {
+    e.preventDefault()
+    setError('')
+    verifyCode(phone, code, password)
+      .then(() => {
+        setAuthStep('authorized')
+        loadGroupsAndConfig()
+      })
+      .catch(err => setError(err.response?.data?.detail || err.message || 'Verification failed'))
+  }
+
+  const persist = (updated) => {
+    setCfg(updated)
+    setSaving(true)
+    saveConfig(updated).finally(() => setSaving(false))
+  }
+
+  const toggleGroup = (id) => {
+    const has = cfg.monitored_groups.includes(id)
+    persist({ ...cfg, monitored_groups: has ? cfg.monitored_groups.filter(x => x !== id) : [...cfg.monitored_groups, id] })
+  }
+
+  const removeKeyword = (kw) => persist({ ...cfg, keywords: cfg.keywords.filter(k => k !== kw) })
+
+  const addKeyword = () => {
+    const kw = newKeyword.trim()
+    if (!kw || cfg.keywords.includes(kw)) return
+    persist({ ...cfg, keywords: [...cfg.keywords, kw] })
+    setNewKeyword('')
+  }
+
+  if (authStep === 'checking') {
+    return (
+      <div className="card">
+        <div className="card-title">Monitor</div>
+        <span className="loading">Checking auth...</span>
+      </div>
+    )
+  }
+
+  if (authStep === 'phone') {
+    return (
+      <div className="card">
+        <div className="card-title">Monitor — Sign In</div>
+        {error && <span className="inline-msg error">{error}</span>}
+        <form onSubmit={handleSendCode} className="form-row">
+          <div className="form-field">
+            <label>Phone Number</label>
+            <input type="text" placeholder="+1234567890" value={phone} onChange={e => setPhone(e.target.value)} />
+          </div>
+          <button className="btn" type="submit">Send Code</button>
+        </form>
+      </div>
+    )
+  }
+
+  if (authStep === 'code') {
+    return (
+      <div className="card">
+        <div className="card-title">Monitor — Verify</div>
+        {error && <span className="inline-msg error">{error}</span>}
+        <form onSubmit={handleVerify} className="form-row">
+          <div className="form-field">
+            <label>Code</label>
+            <input type="text" placeholder="12345" value={code} onChange={e => setCode(e.target.value)} />
+          </div>
+          <div className="form-field">
+            <label>2FA Password (if enabled)</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} />
+          </div>
+          <button className="btn" type="submit">Verify</button>
+        </form>
+      </div>
+    )
+  }
+
+  return (
+    <div className="card">
+      <div className="card-title">Monitor {saving && <span className="loading" style={{ marginLeft: '0.5rem' }}>Saving...</span>}</div>
+      {error && <span className="inline-msg error">{error}</span>}
+
+      <div className="monitor-section">
+        <div className="monitor-section-title">Groups</div>
+        {groups.map(group => (
+          <div className="group-item" key={group.id}>
+            <input
+              type="checkbox"
+              checked={cfg.monitored_groups.includes(group.id)}
+              onChange={() => toggleGroup(group.id)}
+            />
+            <span>{group.name || group.title}</span>
+            <span className={group.type === 'channel' ? 'badge-channel' : 'badge-group'}>{group.type}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="monitor-section">
+        <div className="monitor-section-title">Keywords</div>
+        <div className="keyword-list">
+          {cfg.keywords.map(kw => (
+            <span className="keyword-tag" key={kw}>
+              {kw}
+              <button onClick={() => removeKeyword(kw)}>&times;</button>
+            </span>
+          ))}
+        </div>
+        <div className="form-row" style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <div className="form-field" style={{ flex: 1 }}>
+            <input
+              type="text"
+              placeholder="New keyword"
+              value={newKeyword}
+              onChange={e => setNewKeyword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addKeyword())}
+            />
+          </div>
+          <button className="btn" type="button" onClick={addKeyword}>Add</button>
+        </div>
+      </div>
+
+      <div className="monitor-section">
+        <div className="monitor-section-title">Status</div>
+        <div className="toggle-row">
+          <input
+            type="checkbox"
+            checked={cfg.active}
+            onChange={e => persist({ ...cfg, active: e.target.checked })}
+          />
+          <span>Active</span>
+        </div>
+      </div>
+    </div>
+  )
+}
